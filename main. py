@@ -1,0 +1,100 @@
+import os
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    CallbackQueryHandler,
+    MessageHandler,
+    ContextTypes,
+    filters
+)
+
+TOKEN = os.getenv("BOT_TOKEN")
+GROUP_ID = os.getenv("GROUP_ID")  # اینو بعداً تو Render وارد می‌کنیم
+
+# ---- دستور برای گرفتن آیدی گروه ----
+async def get_group_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    await update.message.reply_text(f"آیدی این گروه: {chat_id}")
+
+# ---- شروع ربات ----
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.clear()
+    await update.message.reply_text(
+        "سلام 🌱\nاسمت چیه؟\n(برای گرفتن آیدی گروه /getid رو هم می‌تونی استفاده کنی)"
+    )
+
+# ---- گرفتن اسم ----
+async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["name"] = update.message.text
+
+    keyboard = [
+        [
+            InlineKeyboardButton("🎮 بازی", callback_data="interest_game"),
+            InlineKeyboardButton("📚 مطالعه", callback_data="interest_book")
+        ],
+        [
+            InlineKeyboardButton("🎨 هنر", callback_data="interest_art")
+        ]
+    ]
+
+    await update.message.reply_text(
+        "به چی علاقه داری؟",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+# ---- گرفتن علاقه ----
+async def get_interest(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    context.user_data["interest"] = query.data.replace("interest_", "")
+
+    keyboard = [
+        [
+            InlineKeyboardButton("🟢 مبتدی", callback_data="level_beginner"),
+            InlineKeyboardButton("🔵 متوسط", callback_data="level_mid"),
+            InlineKeyboardButton("🔴 حرفه‌ای", callback_data="level_pro")
+        ]
+    ]
+
+    await query.message.reply_text(
+        "سطحت چیه؟",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+# ---- گرفتن سطح و ارسال به گروه ----
+async def get_level(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    context.user_data["level"] = query.data.replace("level_", "")
+
+    data = context.user_data
+
+    text = (
+        "📥 فرم جدید:\n\n"
+        f"👤 اسم: {data['name']}\n"
+        f"⭐ علاقه: {data['interest']}\n"
+        f"📊 سطح: {data['level']}"
+    )
+
+    # ارسال به گروه
+    await context.bot.send_message(chat_id=int(GROUP_ID), text=text)
+    await query.message.reply_text("✅ ثبت شد! ممنون 🌱")
+
+# ---- تابع اصلی ----
+def main():
+    app = ApplicationBuilder().token(TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("getid", get_group_id))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, get_name))
+    app.add_handler(CallbackQueryHandler(get_interest, pattern="^interest_"))
+    app.add_handler(CallbackQueryHandler(get_level, pattern="^level_"))
+
+    print("Bot started...")
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()
